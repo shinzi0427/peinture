@@ -2,10 +2,7 @@
 import { S3Config, CloudFile, WebDAVConfig, StorageType } from "../types";
 // @ts-ignore
 import { dir, file, write } from 'opfs-tools';
-
-const S3_CONFIG_KEY = 'app_s3_config';
-const WEBDAV_CONFIG_KEY = 'app_webdav_config';
-const STORAGE_TYPE_KEY = 'app_storage_type';
+import { useAppStore } from "../store/appStore";
 
 const OPFS_TMP_DIR = '/tmp';
 const OPFS_GALLERY_DIR = '/gallery';
@@ -27,57 +24,25 @@ export const DEFAULT_WEBDAV_CONFIG: WebDAVConfig = {
     directory: 'peinture'
 };
 
-// --- Configuration Management ---
+// --- Configuration Management (Proxied to Store) ---
 
 export const getS3Config = (): S3Config => {
-    if (typeof localStorage === 'undefined') return DEFAULT_S3_CONFIG;
-    try {
-        const stored = localStorage.getItem(S3_CONFIG_KEY);
-        if (stored) {
-            return { ...DEFAULT_S3_CONFIG, ...JSON.parse(stored) };
-        }
-    } catch (e) {
-        console.error("Failed to load S3 config", e);
-    }
-    return DEFAULT_S3_CONFIG;
+    return useAppStore.getState().s3Config || DEFAULT_S3_CONFIG;
 };
 
 export const getWebDAVConfig = (): WebDAVConfig => {
-    if (typeof localStorage === 'undefined') return DEFAULT_WEBDAV_CONFIG;
-    try {
-        const stored = localStorage.getItem(WEBDAV_CONFIG_KEY);
-        if (stored) {
-            return { ...DEFAULT_WEBDAV_CONFIG, ...JSON.parse(stored) };
-        }
-    } catch (e) {
-        console.error("Failed to load WebDAV config", e);
-    }
-    return DEFAULT_WEBDAV_CONFIG;
+    return useAppStore.getState().webdavConfig || DEFAULT_WEBDAV_CONFIG;
 };
 
 export const getStorageType = (): StorageType => {
-    if (typeof localStorage === 'undefined') return 'opfs';
-    const type = localStorage.getItem(STORAGE_TYPE_KEY) as StorageType;
-    return ['s3', 'webdav', 'opfs'].includes(type) ? type : 'opfs';
+    return useAppStore.getState().storageType || 'opfs';
 };
 
-export const saveS3Config = (config: S3Config) => {
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(S3_CONFIG_KEY, JSON.stringify(config));
-    }
-};
-
-export const saveWebDAVConfig = (config: WebDAVConfig) => {
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(WEBDAV_CONFIG_KEY, JSON.stringify(config));
-    }
-};
-
-export const saveStorageType = (type: StorageType) => {
-    if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(STORAGE_TYPE_KEY, type);
-    }
-};
+// Note: save* functions are removed as components should dispatch actions to the store directly.
+// If needed for imperative logic outside react:
+export const saveS3Config = (config: S3Config) => useAppStore.getState().setS3Config(config);
+export const saveWebDAVConfig = (config: WebDAVConfig) => useAppStore.getState().setWebDAVConfig(config);
+export const saveStorageType = (type: StorageType) => useAppStore.getState().setStorageType(type);
 
 export const isS3Configured = (config: S3Config): boolean => {
     return !!(config.accessKeyId && config.secretAccessKey);
@@ -458,6 +423,39 @@ export const initOpfsDirs = async () => {
         await dir(OPFS_GALLERY_DIR).create();
     } catch (e) {
         console.error("Failed to init OPFS dirs", e);
+    }
+};
+
+// Cleanup OPFS tmp files older than 24 hours
+export const cleanupOldTempFiles = async () => {
+    try {
+        const root = await navigator.storage.getDirectory();
+        let tmpHandle;
+        try {
+            tmpHandle = await root.getDirectoryHandle('tmp');
+        } catch {
+            return;
+        }
+
+        const now = Date.now();
+        const oneDayInMs = 24 * 60 * 60 * 1000;
+        
+        // @ts-ignore
+        for await (const [name, handle] of tmpHandle.entries()) {
+            if (handle.kind === 'file') {
+                try {
+                    const fileHandle = handle as FileSystemFileHandle;
+                    const file = await fileHandle.getFile();
+                    if ((now - file.lastModified) > oneDayInMs) {
+                        await tmpHandle.removeEntry(name);
+                    }
+                } catch (err) {
+                    console.warn(`Failed to cleanup file ${name}`, err);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Error cleaning up OPFS tmp files", e);
     }
 };
 

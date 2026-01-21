@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/appStore';
 import { 
-    S3Config, WebDAVConfig, StorageType, CustomProvider, RemoteModelList, ServiceMode, VideoSettings, UnifiedModelOption 
+    S3Config, WebDAVConfig, StorageType, CustomProvider, RemoteModelList, ServiceMode, VideoSettings, UnifiedModelOption, ProviderId 
 } from '../types';
 import {
     getSystemPromptContent, saveSystemPromptContent, DEFAULT_SYSTEM_PROMPT_CONTENT,
@@ -22,22 +22,13 @@ import {
     getStorageType, saveStorageType,
     testWebDAVConnection, testS3Connection, clearOPFS
 } from '../services/storageService';
-import {
-    getTokenStats, getTokens
-} from '../services/hfService';
-import {
-    getGiteeTokenStats, getGiteeTokens
-} from '../services/giteeService';
-import {
-    getMsTokenStats, getMsTokens
-} from '../services/msService';
-import {
-    getA4FTokenStats, getA4FTokens
-} from '../services/a4fService';
 import { HF_MODEL_OPTIONS, GITEE_MODEL_OPTIONS, MS_MODEL_OPTIONS, A4F_MODEL_OPTIONS, EDIT_MODELS, LIVE_MODELS, TEXT_MODELS, UPSCALER_MODELS } from '../constants';
 
 export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
-    const { provider, setProvider, model, setModel } = useAppStore();
+    const { 
+        provider, setProvider, model, setModel, 
+        tokens, tokenStatus, setProviderTokens 
+    } = useAppStore();
 
     // -- State --
     const [activeTab, setActiveTab] = useState<'general' | 'provider' | 'models' | 'prompt' | 'live' | 's3' | 'webdav'>('general');
@@ -88,26 +79,38 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
     const [testS3Result, setTestS3Result] = useState<{ success: boolean; message: string } | null>(null);
     const [isTestingS3, setIsTestingS3] = useState(false);
 
+    const calculateStats = (tokensList: string[], providerId: ProviderId) => {
+        const total = tokensList.length;
+        const exhaustedMap = tokenStatus[providerId]?.exhausted || {};
+        const exhaustedCount = tokensList.filter(t => exhaustedMap[t]).length;
+        return {
+            total,
+            exhausted: exhaustedCount,
+            active: total - exhaustedCount
+        };
+    };
+
     // -- Initialization --
     useEffect(() => {
         if (isOpen) {
             setServiceMode(getServiceMode());
 
-            const storedToken = localStorage.getItem('huggingFaceToken') || '';
-            setToken(storedToken);
-            setStats(getTokenStats(storedToken));
+            // Initialize form state from store
+            const hfTokens = tokens.huggingface || [];
+            setToken(hfTokens.join(','));
+            setStats(calculateStats(hfTokens, 'huggingface'));
 
-            const storedGiteeToken = localStorage.getItem('giteeToken') || '';
-            setGiteeToken(storedGiteeToken);
-            setGiteeStats(getGiteeTokenStats(storedGiteeToken));
+            const gTokens = tokens.gitee || [];
+            setGiteeToken(gTokens.join(','));
+            setGiteeStats(calculateStats(gTokens, 'gitee'));
 
-            const storedMsToken = localStorage.getItem('msToken') || '';
-            setMsToken(storedMsToken);
-            setMsStats(getMsTokenStats(storedMsToken));
+            const mTokens = tokens.modelscope || [];
+            setMsToken(mTokens.join(','));
+            setMsStats(calculateStats(mTokens, 'modelscope'));
 
-            const storedA4FToken = localStorage.getItem('a4fToken') || '';
-            setA4FToken(storedA4FToken);
-            setA4FStats(getA4FTokenStats(storedA4FToken));
+            const aTokens = tokens.a4f || [];
+            setA4FToken(aTokens.join(','));
+            setA4FStats(calculateStats(aTokens, 'a4f'));
 
             setCustomProviders(getCustomProviders());
 
@@ -146,7 +149,7 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
             setFetchedModels(null);
             setFetchStatus('idle');
         }
-    }, [isOpen, provider, model]);
+    }, [isOpen, provider, model, tokens, tokenStatus]);
 
     // -- Validation Effect --
     useEffect(() => {
@@ -157,15 +160,9 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
 
             if (isLocal) {
                 baseList.filter(m => m.provider === 'huggingface').forEach(m => valid.add(m.value));
-                if (giteeToken || localStorage.getItem('giteeToken')) {
-                     baseList.filter(m => m.provider === 'gitee').forEach(m => valid.add(m.value));
-                }
-                if (msToken || localStorage.getItem('msToken')) {
-                     baseList.filter(m => m.provider === 'modelscope').forEach(m => valid.add(m.value));
-                }
-                if (a4fToken || localStorage.getItem('a4fToken')) {
-                     baseList.filter(m => m.provider === 'a4f').forEach(m => valid.add(m.value));
-                }
+                if (giteeToken) baseList.filter(m => m.provider === 'gitee').forEach(m => valid.add(m.value));
+                if (msToken) baseList.filter(m => m.provider === 'modelscope').forEach(m => valid.add(m.value));
+                if (a4fToken) baseList.filter(m => m.provider === 'a4f').forEach(m => valid.add(m.value));
             }
 
             if (isServer) {
@@ -355,10 +352,11 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
     };
 
     const handleSave = () => {
-        localStorage.setItem('huggingFaceToken', token.trim());
-        localStorage.setItem('giteeToken', giteeToken.trim());
-        localStorage.setItem('msToken', msToken.trim());
-        localStorage.setItem('a4fToken', a4fToken.trim());
+        // Dispatch actions to update store tokens
+        setProviderTokens('huggingface', token);
+        setProviderTokens('gitee', giteeToken);
+        setProviderTokens('modelscope', msToken);
+        setProviderTokens('a4f', a4fToken);
         
         saveSystemPromptContent(systemPrompt);
         saveTranslationPromptContent(translationPrompt);
@@ -386,20 +384,23 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
         onClose();
     };
 
-    // Helper to update tokens and stats
-    const updateToken = (type: 'hf' | 'gitee' | 'ms' | 'a4f', value: string) => {
-        if (type === 'hf') {
+    // Helper to update local state and calculate new stats immediately
+    const updateToken = (type: ProviderId, value: string) => {
+        const list = value.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        const newStats = calculateStats(list, type);
+
+        if (type === 'huggingface') {
             setToken(value);
-            setStats(getTokenStats(value));
+            setStats(newStats);
         } else if (type === 'gitee') {
             setGiteeToken(value);
-            setGiteeStats(getGiteeTokenStats(value));
-        } else if (type === 'ms') {
+            setGiteeStats(newStats);
+        } else if (type === 'modelscope') {
             setMsToken(value);
-            setMsStats(getMsTokenStats(value));
+            setMsStats(newStats);
         } else if (type === 'a4f') {
             setA4FToken(value);
-            setA4FStats(getA4FTokenStats(value));
+            setA4FStats(newStats);
         }
     };
 
@@ -407,7 +408,13 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
         activeTab, setActiveTab,
         serviceMode, handleServiceModeChange,
         storageType, setStorageType,
-        token, stats, giteeToken, giteeStats, msToken, msStats, a4fToken, a4fStats, updateToken,
+        
+        token, stats, 
+        giteeToken, giteeStats, 
+        msToken, msStats, 
+        a4fToken, a4fStats, 
+        updateToken,
+
         customProviders, handleUpdateCustomProvider, handleDeleteCustomProvider, handleRefreshCustomModels, refreshingProviders, refreshSuccessProviders,
         newProviderName, setNewProviderName, newProviderUrl, setNewProviderUrl, newProviderToken, setNewProviderToken, fetchStatus, fetchedModels, handleFetchCustomModels, handleAddCustomProvider,
         systemPrompt, setSystemPrompt, translationPrompt, setTranslationPrompt,
@@ -417,7 +424,7 @@ export const useSettingsForm = (isOpen: boolean, onClose: () => void) => {
         textModelValue, setTextModelValue,
         upscalerModelValue, setUpscalerModelValue,
         videoSettings, setVideoSettings,
-        s3Config, setS3Config, showS3Secret: false, // UI can handle show toggle if local state needed, or add here
+        s3Config, setS3Config, showS3Secret: false,
         webdavConfig, setWebdavConfig,
         testS3Result, isTestingS3, handleTestS3,
         testWebDAVResult, isTestingWebDAV, handleTestWebDAV,

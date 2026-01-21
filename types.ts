@@ -77,6 +77,13 @@ export type ModelOption =
 
 export type ProviderOption = "huggingface" | "gitee" | "modelscope" | "a4f" | string;
 
+export type ProviderId = 'huggingface' | 'gitee' | 'modelscope' | 'a4f';
+
+export interface TokenStatus {
+    date: string;
+    exhausted: Record<string, boolean>;
+}
+
 export interface GenerationParams {
     model: ModelOption;
     prompt: string;

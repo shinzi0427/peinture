@@ -3,15 +3,17 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, ShieldCheck, ShieldAlert, ChevronDown, Loader2, RotateCcw, Check, Trash2, Globe } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { translations } from '../../translations';
-import { ServiceMode, CustomProvider, RemoteModelList } from '../../types';
+import { ServiceMode, CustomProvider, RemoteModelList, ProviderId } from '../../types';
 
 interface ProviderTabProps {
     serviceMode: ServiceMode;
     // Token States
-    token: string; setToken: (v: string) => void; stats: any;
-    giteeToken: string; setGiteeToken: (v: string) => void; giteeStats: any;
-    msToken: string; setMsToken: (v: string) => void; msStats: any;
-    a4fToken: string; setA4FToken: (v: string) => void; a4fStats: any;
+    token: string; stats: any;
+    giteeToken: string; giteeStats: any;
+    msToken: string; msStats: any;
+    a4fToken: string; a4fStats: any;
+    // Update Handler
+    updateToken: (type: ProviderId, val: string) => void;
     // Custom Provider Props
     customProviders: CustomProvider[];
     handleUpdateCustomProvider: (id: string, updates: Partial<CustomProvider>) => void;
@@ -147,13 +149,13 @@ export const ProviderTab: React.FC<ProviderTabProps> = (props) => {
             {showBaseProviders && (
                 <>
                     {renderProviderPanel('huggingface', t.provider_huggingface, 'bg-yellow-500', 
-                        renderTokenInput('hf', props.token, (v) => props.setToken(v), props.stats, 'hf_...,hf_...', t.hfTokenHelp, t.hfTokenLink, t.hfTokenHelpEnd, "https://huggingface.co/settings/tokens"))}
+                        renderTokenInput('hf', props.token, (v) => props.updateToken('huggingface', v), props.stats, 'hf_...,hf_...', t.hfTokenHelp, t.hfTokenLink, t.hfTokenHelpEnd, "https://huggingface.co/settings/tokens"))}
                     {renderProviderPanel('gitee', t.provider_gitee, 'bg-red-500', 
-                        renderTokenInput('gitee', props.giteeToken, (v) => props.setGiteeToken(v), props.giteeStats, '...,...', t.giteeTokenHelp, t.giteeTokenLink, t.giteeTokenHelpEnd, "https://ai.gitee.com/dashboard/settings/tokens"))}
+                        renderTokenInput('gitee', props.giteeToken, (v) => props.updateToken('gitee', v), props.giteeStats, '...,...', t.giteeTokenHelp, t.giteeTokenLink, t.giteeTokenHelpEnd, "https://ai.gitee.com/dashboard/settings/tokens"))}
                     {renderProviderPanel('modelscope', t.provider_modelscope, 'bg-blue-500', 
-                        renderTokenInput('ms', props.msToken, (v) => props.setMsToken(v), props.msStats, 'ms-...,ms-...', t.msTokenHelp, t.msTokenLink, t.msTokenHelpEnd, "https://modelscope.cn/my/myaccesstoken"))}
+                        renderTokenInput('ms', props.msToken, (v) => props.updateToken('modelscope', v), props.msStats, 'ms-...,ms-...', t.msTokenHelp, t.msTokenLink, t.msTokenHelpEnd, "https://modelscope.cn/my/myaccesstoken"))}
                     {renderProviderPanel('a4f', t.provider_a4f, 'bg-emerald-500', 
-                        renderTokenInput('a4f', props.a4fToken, (v) => props.setA4FToken(v), props.a4fStats, 'ddc-...,ddc-...', t.a4fTokenHelp, t.a4fTokenLink, t.a4fTokenHelpEnd, "https://www.a4f.co/api-keys"))}
+                        renderTokenInput('a4f', props.a4fToken, (v) => props.updateToken('a4f', v), props.a4fStats, 'ddc-...,ddc-...', t.a4fTokenHelp, t.a4fTokenLink, t.a4fTokenHelpEnd, "https://www.a4f.co/api-keys"))}
                 </>
             )}
             {showCustomProviders && (

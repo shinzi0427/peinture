@@ -24,7 +24,8 @@ export const ControlPanel: React.FC = () => {
         aspectRatio, setAspectRatio,
         steps, setSteps,
         guidanceScale, setGuidanceScale,
-        seed, setSeed
+        seed, setSeed,
+        tokens
     } = useAppStore();
     
     const t = translations[language];
@@ -60,8 +61,7 @@ export const ControlPanel: React.FC = () => {
                 });
 
                 // Gitee (Only if token exists)
-                const hasGiteeToken = localStorage.getItem('giteeToken');
-                if (hasGiteeToken) {
+                if (tokens.gitee && tokens.gitee.length > 0) {
                     groups.push({
                         label: t.provider_gitee,
                         options: GITEE_MODEL_OPTIONS.map(m => ({ label: m.label, value: `gitee:${m.value}` }))
@@ -69,8 +69,7 @@ export const ControlPanel: React.FC = () => {
                 }
 
                 // Model Scope (Only if token exists)
-                const hasMsToken = localStorage.getItem('msToken');
-                if (hasMsToken) {
+                if (tokens.modelscope && tokens.modelscope.length > 0) {
                     groups.push({
                         label: t.provider_modelscope,
                         options: MS_MODEL_OPTIONS.map(m => ({ label: m.label, value: `modelscope:${m.value}` }))
@@ -78,8 +77,7 @@ export const ControlPanel: React.FC = () => {
                 }
 
                 // A4F (Only if token exists)
-                const hasA4FToken = localStorage.getItem('a4fToken');
-                if (hasA4FToken) {
+                if (tokens.a4f && tokens.a4f.length > 0) {
                     groups.push({
                         label: t.provider_a4f,
                         options: A4F_MODEL_OPTIONS.map(m => ({ label: m.label, value: `a4f:${m.value}` }))
@@ -111,7 +109,7 @@ export const ControlPanel: React.FC = () => {
         // Listen for storage changes to update list dynamically (e.g. after adding token in settings)
         window.addEventListener('storage', updateModelOptions);
         return () => window.removeEventListener('storage', updateModelOptions);
-    }, [t]);
+    }, [t, tokens]);
 
     // Determine current model configuration (Standard or Custom)
     const activeConfig = useMemo(() => {

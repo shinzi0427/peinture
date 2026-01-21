@@ -3,6 +3,7 @@ import { GeneratedImage, AspectRatioOption, ModelOption } from "../types";
 import { generateUUID, getSystemPromptContent, FIXED_SYSTEM_PROMPT_SUFFIX, getVideoSettings, fetchBlob } from "./utils";
 import { fetchCloudBlob } from "./storageService";
 import { API_MODEL_MAP } from "../constants";
+import { useAppStore } from "../store/appStore";
 
 const ZIMAGE_BASE_API_URL = "https://luca115-z-image-turbo.hf.space";
 const QWEN_IMAGE_BASE_API_URL = "https://mcp-tools-qwen-image-fast.hf.space";
@@ -13,81 +14,30 @@ const POLLINATIONS_API_URL = "https://text.pollinations.ai/openai";
 const WAN2_VIDEO_API_URL = "https://fradeck619-wan2-2-fp8da-aoti-faster.hf.space";
 export const QWEN_IMAGE_EDIT_BASE_API_URL = "https://linoyts-qwen-image-edit-2509-fast.hf.space";
 
-// --- Token Management System ---
+// --- Token Management System (Refactored to Store) ---
 
-const TOKEN_STORAGE_KEY = 'huggingFaceToken';
-const TOKEN_STATUS_KEY = 'hf_token_status';
 const QUOTA_ERROR_KEY = "error_quota_exhausted";
 
-interface TokenStatusStore {
-  date: string; // YYYY-MM-DD
-  exhausted: Record<string, boolean>;
-}
-
-const getUTCDatesString = () => new Date().toISOString().split('T')[0];
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const getTokenStatusStore = (): TokenStatusStore => {
-  const defaultStore = { date: getUTCDatesString(), exhausted: {} };
-  if (typeof localStorage === 'undefined') return defaultStore;
-
-  try {
-    const raw = localStorage.getItem(TOKEN_STATUS_KEY);
-    if (!raw) return defaultStore;
-    const store = JSON.parse(raw);
-    // Reset if it's a new day (UTC)
-    if (store.date !== getUTCDatesString()) {
-      return defaultStore;
-    }
-    return store;
-  } catch {
-    return defaultStore;
-  }
-};
-
-const saveTokenStatusStore = (store: TokenStatusStore) => {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(TOKEN_STATUS_KEY, JSON.stringify(store));
-  }
-};
-
-export const getTokens = (rawInput?: string | null): string[] => {
-  const input = rawInput !== undefined ? rawInput : (typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_STORAGE_KEY) : '');
-  if (!input) return [];
-  return input.split(',').map(t => t.trim()).filter(t => t.length > 0);
-};
-
-export const getTokenStats = (rawInput: string) => {
-  const tokens = getTokens(rawInput);
-  const store = getTokenStatusStore();
-  const total = tokens.length;
-  // A token is exhausted only if it's in the store's exhausted list for today
-  const exhausted = tokens.filter(t => store.exhausted[t]).length;
-  return {
-    total,
-    exhausted,
-    active: total - exhausted
-  };
-};
-
 const getNextAvailableToken = (): string | null => {
-  const tokens = getTokens();
-  const store = getTokenStatusStore();
+  const store = useAppStore.getState();
+  // Ensure we are using today's status
+  store.resetDailyStatus('huggingface');
+  
+  const tokens = store.tokens.huggingface || [];
+  const status = store.tokenStatus.huggingface;
+  
   // Return the first token that is NOT marked as exhausted
-  return tokens.find(t => !store.exhausted[t]) || null;
+  return tokens.find(t => !status.exhausted[t]) || null;
 };
 
 const markTokenExhausted = (token: string) => {
-  const store = getTokenStatusStore();
-  store.exhausted[token] = true;
-  saveTokenStatusStore(store);
+  useAppStore.getState().markTokenExhausted('huggingface', token);
 };
 
 // --- API Execution Wrapper ---
 
 const runWithTokenRetry = async <T>(operation: (token: string | null) => Promise<T>): Promise<T> => {
-  const tokens = getTokens();
+  const tokens = useAppStore.getState().tokens.huggingface || [];
 
   // If no tokens configured, run once with no token (public quota)
   if (tokens.length === 0) {

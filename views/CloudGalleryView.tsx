@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { CloudFile } from '../types';
 import { CloudUpload, Image as ImageIcon, Loader2, Download, Trash2, Copy, Eye, EyeOff, X, Check, Settings } from 'lucide-react';
 import { isStorageConfigured, listCloudFiles, deleteCloudFile, getStorageType, fetchCloudBlob, renameCloudFile, getFileId, getS3Config } from '../services/storageService';
-import { downloadImage } from '../services/utils';
+import { downloadImage, generateUUID } from '../services/utils';
 import { Tooltip } from '../components/Tooltip';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useAppStore } from '../store/appStore';
@@ -146,11 +146,18 @@ export const CloudGalleryView: React.FC<CloudGalleryViewProps> = ({ handleUpload
                 // 2. Generate ID and Filename
                 // Check if the original file is marked as NSFW
                 const isNSFW = file.name.toUpperCase().includes('.NSFW');
-                const ext = file.name.split('.').pop();
-                const id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                const parts = file.name.split('.');
+                const ext = parts.length > 1 ? parts.pop() : '';
                 
-                // If local file has NSFW, append .NSFW to the new filename
-                const fileName = isNSFW ? `${id}.NSFW.${ext}` : `${id}.${ext}`;
+                let id = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                
+                if (getStorageType() === 'opfs') {
+                    id = generateUUID();
+                }
+                
+                const fileName = isNSFW 
+                    ? (ext ? `${id}.NSFW.${ext}` : `${id}.NSFW`)
+                    : (ext ? `${id}.${ext}` : id);
 
                 // 3. Prepare Metadata
                 const metadata = {

@@ -1,9 +1,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { initOpfsDirs, readTempFileFromOPFS, deleteTempFileFromOPFS, saveTempFileToOPFS } from '../services/storageService';
+import { initOpfsDirs, readTempFileFromOPFS, deleteTempFileFromOPFS, saveTempFileToOPFS, cleanupOldTempFiles } from '../services/storageService';
 import { GeneratedImage, CustomProvider, ModelOption } from '../types';
-import { getServiceMode, saveServiceMode, getCustomProviders, addCustomProvider, generateUUID, fetchBlob } from '../services/utils';
+import { getServiceMode, getCustomProviders, addCustomProvider, generateUUID, fetchBlob } from '../services/utils';
 import { fetchServerModels, getCustomTaskStatus } from '../services/customService';
 import { getGiteeTaskStatus } from '../services/giteeService';
 import { HF_MODEL_OPTIONS, GITEE_MODEL_OPTIONS, MS_MODEL_OPTIONS, A4F_MODEL_OPTIONS, getModelConfig, getGuidanceScaleConfig } from '../constants';
@@ -17,7 +17,8 @@ export const useAppInit = () => {
         currentImage, setCurrentImage,
         setIsLiveMode,
         setError,
-        currentView
+        currentView,
+        setServiceMode // Use Store Action
     } = useAppStore();
 
     // Password Modal State
@@ -29,6 +30,7 @@ export const useAppInit = () => {
     useEffect(() => {
         const hydrateHistory = async () => {
             await initOpfsDirs();
+            await cleanupOldTempFiles();
             
             const currentHistory = useAppStore.getState().history;
             const now = Date.now();
@@ -153,7 +155,7 @@ export const useAppInit = () => {
             };
             
             addCustomProvider(serverProvider);
-            saveServiceMode('server');
+            setServiceMode('server'); // Use Store Action
             window.dispatchEvent(new Event("storage"));
             
             if (models.generate && models.generate.length > 0) {
@@ -168,7 +170,7 @@ export const useAppInit = () => {
     };
 
     const handleSwitchToLocal = () => {
-        saveServiceMode('local');
+        setServiceMode('local'); // Use Store Action
         window.dispatchEvent(new Event("storage"));
         setShowPasswordModal(false);
         setProvider('huggingface');

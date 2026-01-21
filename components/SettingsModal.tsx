@@ -104,10 +104,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                     {tab.id === 'provider' && (
                                         <ProviderTab 
                                             serviceMode={form.serviceMode}
-                                            token={form.token} setToken={(v) => form.updateToken('hf', v)} stats={form.stats}
-                                            giteeToken={form.giteeToken} setGiteeToken={(v) => form.updateToken('gitee', v)} giteeStats={form.giteeStats}
-                                            msToken={form.msToken} setMsToken={(v) => form.updateToken('ms', v)} msStats={form.msStats}
-                                            a4fToken={form.a4fToken} setA4FToken={(v) => form.updateToken('a4f', v)} a4fStats={form.a4fStats}
+                                            token={form.token} stats={form.stats}
+                                            giteeToken={form.giteeToken} giteeStats={form.giteeStats}
+                                            msToken={form.msToken} msStats={form.msStats}
+                                            a4fToken={form.a4fToken} a4fStats={form.a4fStats}
+                                            updateToken={form.updateToken}
                                             customProviders={form.customProviders}
                                             handleUpdateCustomProvider={form.handleUpdateCustomProvider}
                                             handleDeleteCustomProvider={form.handleDeleteCustomProvider}

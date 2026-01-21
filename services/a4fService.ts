@@ -2,75 +2,29 @@
 import { GeneratedImage, AspectRatioOption, ModelOption } from "../types";
 import { generateUUID, getSystemPromptContent, FIXED_SYSTEM_PROMPT_SUFFIX } from "./utils";
 import { API_MODEL_MAP } from "../constants";
+import { useAppStore } from "../store/appStore";
 
 const A4F_GENERATE_API_URL = "https://api.a4f.co/v1/images/generations";
 const A4F_CHAT_API_URL = "https://api.a4f.co/v1/chat/completions";
 
-const TOKEN_STORAGE_KEY = 'a4fToken';
-const TOKEN_STATUS_KEY = 'a4f_token_status';
-
-interface TokenStatusStore {
-  date: string; // YYYY-MM-DD
-  exhausted: Record<string, boolean>;
-}
-
-const getUTCDatesString = () => new Date().toISOString().split('T')[0];
-
-const getTokenStatusStore = (): TokenStatusStore => {
-  const defaultStore = { date: getUTCDatesString(), exhausted: {} };
-  if (typeof localStorage === 'undefined') return defaultStore;
-
-  try {
-    const raw = localStorage.getItem(TOKEN_STATUS_KEY);
-    if (!raw) return defaultStore;
-    const store = JSON.parse(raw);
-    if (store.date !== getUTCDatesString()) {
-      return defaultStore;
-    }
-    return store;
-  } catch {
-    return defaultStore;
-  }
-};
-
-const saveTokenStatusStore = (store: TokenStatusStore) => {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(TOKEN_STATUS_KEY, JSON.stringify(store));
-  }
-};
-
-export const getA4FTokens = (rawInput?: string | null): string[] => {
-  const input = rawInput !== undefined ? rawInput : (typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_STORAGE_KEY) : '');
-  if (!input) return [];
-  return input.split(',').map(t => t.trim()).filter(t => t.length > 0);
-};
-
-export const getA4FTokenStats = (rawInput: string) => {
-  const tokens = getA4FTokens(rawInput);
-  const store = getTokenStatusStore();
-  const total = tokens.length;
-  const exhausted = tokens.filter(t => store.exhausted[t]).length;
-  return {
-    total,
-    exhausted,
-    active: total - exhausted
-  };
-};
+// --- Token Management System (Refactored to Store) ---
 
 const getNextAvailableToken = (): string | null => {
-  const tokens = getA4FTokens();
-  const store = getTokenStatusStore();
-  return tokens.find(t => !store.exhausted[t]) || null;
+  const store = useAppStore.getState();
+  store.resetDailyStatus('a4f');
+  
+  const tokens = store.tokens.a4f || [];
+  const status = store.tokenStatus.a4f;
+  
+  return tokens.find(t => !status.exhausted[t]) || null;
 };
 
 const markTokenExhausted = (token: string) => {
-  const store = getTokenStatusStore();
-  store.exhausted[token] = true;
-  saveTokenStatusStore(store);
+  useAppStore.getState().markTokenExhausted('a4f', token);
 };
 
 const runWithA4FTokenRetry = async <T>(operation: (token: string) => Promise<T>): Promise<T> => {
-  const tokens = getA4FTokens();
+  const tokens = useAppStore.getState().tokens.a4f || [];
 
   if (tokens.length === 0) {
       throw new Error("error_a4f_token_required");
